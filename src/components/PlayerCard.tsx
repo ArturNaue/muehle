@@ -1,4 +1,4 @@
-// v1.0.0 | 2026-05-31 MEZ
+// v1.0.0 | 2026-06-02 MEZ
 
 import React, { useState, useRef } from 'react';
 import { PlayerInfo, PlayerColor } from '../game/types';
@@ -17,12 +17,15 @@ interface PlayerCardProps {
 /** SVG-Kreis als Steinvorschau */
 const StonePreview: React.FC<{ color: PlayerColor; size?: number }> = ({ color, size = 14 }) => {
   const gradId = `card-marble-${color.toLowerCase()}`;
-  const stops =
-    color === 'WHITE'  ? [['0%','#fff'],['45%','#dcdce0'],['100%','#a8a8b0']] :
-    color === 'BLACK'  ? [['0%','#6b6b72'],['40%','#28282f'],['100%','#0a0a0d']] :
-    /* RED */            [['0%','#f87171'],['40%','#b91c1c'],['100%','#450a0a']];
-  const stroke =
-    color === 'WHITE' ? '#bbb' : color === 'BLACK' ? '#111' : '#7f1d1d';
+  const discs: Record<PlayerColor, { stops: string[][]; stroke: string }> = {
+    WHITE: { stops: [['0%','#ffffff'],['46%','#f8f1df'],['100%','#c8b898']], stroke: '#bfae8f' },
+    BLACK: { stops: [['0%','#6a5544'],['42%','#2b2118'],['100%','#0f0a06']], stroke: '#0f0a06' },
+    BLUE: { stops: [['0%','#93c5fd'],['42%','#2563eb'],['100%','#1e3a8a']], stroke: '#173a9a' },
+    RED: { stops: [['0%','#fda4af'],['42%','#f43f5e'],['100%','#9f1239']], stroke: '#9f1239' },
+    GREEN: { stops: [['0%','#86efac'],['42%','#22c55e'],['100%','#166534']], stroke: '#15803d' },
+    YELLOW: { stops: [['0%','#fde68a'],['42%','#f59e0b'],['100%','#92400e']], stroke: '#92400e' },
+  };
+  const { stops, stroke } = discs[color];
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
@@ -61,18 +64,18 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
   };
 
   const borderColor = isWinner
-    ? 'rgb(251,191,36)'
+    ? '#f59e0b'
     : isActive && !hasWinner
-    ? 'rgb(245,158,11)'
-    : 'rgb(31,41,55)';
+    ? '#f59e0b'
+    : 'rgba(76,46,23,0.32)';
 
   const bgColor = isWinner
-    ? 'rgba(120,53,15,0.5)'
+    ? 'rgba(245,158,11,0.25)'
     : isActive && !hasWinner
-    ? 'rgba(120,53,15,0.35)'
+    ? 'rgba(255,245,224,0.92)'
     : player.eliminated
-    ? 'rgba(17,24,39,0.4)'
-    : 'rgba(17,24,39,0.85)';
+    ? 'rgba(255,245,224,0.45)'
+    : 'rgba(255,250,238,0.9)';
 
   return (
     <div
@@ -101,8 +104,8 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
             id={`${id}-name-input`}
             className="muehle-card-name"
             style={{
-              flex: 1, background: 'rgb(31,41,55)', border: '1px solid rgb(75,85,99)',
-              borderRadius: '4px', padding: '2px 4px', color: 'white', outline: 'none', minWidth: 0,
+              flex: 1, background: 'rgba(255,250,238,0.95)', border: '1px solid rgba(76,46,23,0.38)',
+              borderRadius: '4px', padding: '2px 4px', color: '#3d2412', outline: 'none', minWidth: 0,
             }}
             maxLength={16}
             autoFocus
@@ -113,7 +116,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
             onClick={startEdit}
             title="Namen bearbeiten"
             className="muehle-card-name"
-            style={{ color: 'rgb(156,163,175)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', whiteSpace: 'nowrap' }}
+            style={{ color: '#3d2412', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', whiteSpace: 'nowrap' }}
           >
             {player.name} ✎
           </button>
@@ -122,7 +125,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
       {/* Steine in Hand / auf Brett */}
       <div id={`${id}-stones`} style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
         {player.eliminated ? (
-          <span style={{ fontSize: '10px', color: 'rgb(156,163,175)', fontStyle: 'italic' }}>Ausgeschieden</span>
+          <span style={{ fontSize: '10px', color: '#745033', fontStyle: 'italic' }}>Ausgeschieden</span>
         ) : (
           <>
             <span className="muehle-card-hand" title="Steine noch in der Hand">

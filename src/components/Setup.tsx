@@ -1,130 +1,83 @@
-// v1.3.0 | 2026-05-31 MEZ
+// v1.3.0 | 2026-06-02 MEZ
 
 import React, { useState } from 'react';
-import { DEFAULT_NAMES, PLAYER_COLORS, STONES_BY_VARIANT, BOARD_VARIANT_LABELS, BOARD_VARIANT_DESC } from '../game/constants';
+import { DEFAULT_NAMES, STONES_BY_VARIANT, BOARD_VARIANT_LABELS, getBoardConfig, getPlayerColors } from '../game/constants';
 import { BoardVariant } from '../game/constants';
 import { PlayerColor } from '../game/types';
 
 interface SetupProps {
-  onStart: (playerCount: 2 | 3, names: string[], boardVariant: BoardVariant) => void;
+  onStart: (playerCount: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[]) => void;
 }
 
 const titleStyle: React.CSSProperties = {
   fontFamily: "'Exo 2', sans-serif", fontWeight: 900, letterSpacing: '0.12em',
 };
 
+const COLORS = {
+  appBg: '#f7e1bd',
+  board: '#d99a52',
+  boardEdge: '#8a5329',
+  darkUi: '#4c2e17',
+  text: '#3d2412',
+  textStrong: '#3b220f',
+  mutedText: '#745033',
+  panel: 'rgba(255, 245, 224, 0.84)',
+  panelStrong: 'rgba(255, 250, 238, 0.9)',
+  yellow: '#f59e0b',
+};
+
+const PLAYER_DISC: Record<PlayerColor, { bg: string; border: string }> = {
+  WHITE: { bg: '#f8f1df', border: '#bfae8f' },
+  BLACK: { bg: '#2b2118', border: '#0f0a06' },
+  BLUE: { bg: '#2563eb', border: '#173a9a' },
+  RED: { bg: '#f43f5e', border: '#9f1239' },
+  GREEN: { bg: '#22c55e', border: '#15803d' },
+  YELLOW: { bg: '#f59e0b', border: '#92400e' },
+};
+
 /** Kleiner Steinkreis (Scheibe) als Farbvorschau */
 const DiscPreview: React.FC<{ color: PlayerColor }> = ({ color }) => {
-  const bg =
-    color === 'WHITE' ? 'rgb(230,230,220)' :
-    color === 'BLACK' ? 'rgb(28,28,33)'    :
-    'rgb(176,22,22)';
-  const border =
-    color === 'WHITE' ? 'rgb(170,170,160)' :
-    color === 'BLACK' ? 'rgb(65,65,72)'    :
-    'rgb(120,10,10)';
+  const { bg, border } = PLAYER_DISC[color];
   return (
     <span style={{
       display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
       background: bg, border: `1.5px solid ${border}`,
-      boxShadow: '0 2px 4px rgba(0,0,0,0.5)', flexShrink: 0,
+      boxShadow: '0 2px 4px rgba(61,36,18,0.34)', flexShrink: 0,
     }} />
   );
 };
 
 /** Mini-SVG-Vorschau – Form und Linien entsprechen dem echten Spielfeld */
 const BoardPreview: React.FC<{ variant: BoardVariant; active: boolean }> = ({ variant, active }) => {
-  const lc  = active ? 'rgb(200,155,60)'  : 'rgb(80,95,115)';   // Linienfarbe
-  const nc  = active ? 'rgb(240,195,80)'  : 'rgb(110,130,150)'; // Knotenfarbe
-  const bg  = active ? 'rgba(60,45,15,0.5)' : 'rgba(30,38,52,0.7)'; // Hintergrund
+  const lc  = active ? COLORS.darkUi : COLORS.boardEdge;   // Linienfarbe
+  const nc  = active ? COLORS.yellow : COLORS.darkUi; // Knotenfarbe
+  const bg  = active ? 'rgba(217,154,82,0.72)' : 'rgba(255,245,224,0.58)'; // Hintergrund
   const s   = 58; // SVG-Grösse
-
-  // ── Quadratisches Brett (Standard, Sonnenmühle, Zwölf-Mann, Morabaraba) ──────
-  if (variant !== 'hexagonal') {
-    const hasSonneDiag   = variant === 'sonnenmuhle' || variant === 'vollmuhle';
-    const hasMorabaDiag  = variant === 'morabaraba'  || variant === 'vollmuhle';
-    const strokeW = 0.48;
-
-    // Eck-Diagonalen (Sonnenmühle): [0,8,16] usw.
-    const sonneDiag: [number,number,number,number][] = [
-      [-6,-6, -4,-4], [-4,-4, -2,-2],
-      [ 6,-6,  4,-4], [ 4,-4,  2,-2],
-      [-6, 6, -4, 4], [-4, 4, -2, 2],
-      [ 6, 6,  4, 4], [ 4, 4,  2, 2],
-    ];
-    // X-Diagonalen (Morabaraba): Mittelpunkt→Ecken nächster Ring
-    const morabaDiag: [number,number,number,number][] = [
-      [0,-6,-4,-4],[0,-6, 4,-4], [6,0, 4,-4],[6,0, 4,4],
-      [0, 6,-4, 4],[0, 6, 4, 4],[-6,0,-4,-4],[-6,0,-4,4],
-      [0,-4,-2,-2],[0,-4, 2,-2], [4,0, 2,-2],[4,0, 2,2],
-      [0, 4,-2, 2],[0, 4, 2, 2],[-4,0,-2,-2],[-4,0,-2,2],
-    ];
-
-    const squareNodes = [
-      [-6,-6],[0,-6],[6,-6], [-6,0],[6,0], [-6,6],[0,6],[6,6],
-      [-4,-4],[0,-4],[4,-4], [-4,0],[4,0], [-4,4],[0,4],[4,4],
-      [-2,-2],[0,-2],[2,-2], [-2,0],[2,0], [-2,2],[0,2],[2,2],
-    ];
-
-    return (
-      <svg width={s} height={s} viewBox="-7.5 -7.5 15 15" style={{ display: 'block' }}>
-        <rect x="-7.5" y="-7.5" width="15" height="15" rx="1.5" fill={bg} />
-        {/* Ringe */}
-        <rect x="-6" y="-6" width="12" height="12" fill="none" stroke={lc} strokeWidth={strokeW} />
-        <rect x="-4" y="-4" width="8"  height="8"  fill="none" stroke={lc} strokeWidth={strokeW} />
-        <rect x="-2" y="-2" width="4"  height="4"  fill="none" stroke={lc} strokeWidth={strokeW} />
-        {/* Kreuzverbindungen */}
-        <line x1="0" y1="-6" x2="0" y2="-2" stroke={lc} strokeWidth={strokeW}/>
-        <line x1="0" y1="2"  x2="0" y2="6"  stroke={lc} strokeWidth={strokeW}/>
-        <line x1="-6" y1="0" x2="-2" y2="0" stroke={lc} strokeWidth={strokeW}/>
-        <line x1="2"  y1="0" x2="6"  y2="0" stroke={lc} strokeWidth={strokeW}/>
-        {/* Eck-Diagonalen (Sonnenmühle) */}
-        {hasSonneDiag && sonneDiag.map(([x1,y1,x2,y2],i) =>
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={lc} strokeWidth={strokeW}/>
-        )}
-        {/* X-Diagonalen (Morabaraba) */}
-        {hasMorabaDiag && morabaDiag.map(([x1,y1,x2,y2],i) =>
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={lc} strokeWidth="0.38"/>
-        )}
-        {/* Knoten */}
-        {squareNodes.map(([x,y],i) =>
-          <circle key={i} cx={x} cy={y} r="0.72" fill={nc}/>
-        )}
-      </svg>
-    );
-  }
-
-  // ── Hexagonales Brett (36 Knoten: 12 pro Ring) ───────────────────────────────
-  // Ecke bei geradem k (Radius R), Seitenmittelpunkt bei ungeradem k (Radius R·√3/2)
-  function hp(R: number, k: number): [number,number] {
-    const r = k % 2 === 0 ? R : R * Math.sqrt(3) / 2;
-    const a = k * Math.PI / 6;
-    return [+(r * Math.sin(a)).toFixed(2), -(r * Math.cos(a)).toFixed(2)];
-  }
-  const hexR = [6.0, 4.0, 2.0]; // Umkreisradien der 3 Ringe (in viewBox-Einheiten)
-  const hexNodes = hexR.flatMap(r => Array.from({length:12},(_,k) => hp(r,k)));
-
-  const hexPoly = (R: number) =>
-    Array.from({length:12},(_,k) => hp(R,k)).map(([x,y])=>`${x},${y}`).join(' ');
+  const cfg = getBoardConfig(variant);
+  const xs = cfg.nodes.map(([x]) => x);
+  const ys = cfg.nodes.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const pad = Math.max(maxX - minX, maxY - minY) * 0.12;
 
   return (
-    <svg width={s} height={s} viewBox="-7.5 -7.5 15 15" style={{ display: 'block' }}>
-      {/* Kreisförmiger Hintergrund */}
-      <circle cx="0" cy="0" r="7.2" fill={bg} />
-      {/* 3 Sechseck-Ringe (12-Eck als Polygon) */}
-      {hexR.map((r,i) => (
-        <polygon key={i} points={hexPoly(r)} fill="none" stroke={lc} strokeWidth="0.45"/>
+    <svg width={s} height={s} viewBox={`${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`} style={{ display: 'block' }}>
+      <rect x={minX - pad} y={minY - pad} width={maxX - minX + pad * 2} height={maxY - minY + pad * 2} rx={pad * 0.22} fill={bg} />
+      {cfg.edges.map(([a, b], i) => (
+        <line
+          key={`edge-${i}`}
+          x1={cfg.nodes[a][0]} y1={cfg.nodes[a][1]}
+          x2={cfg.nodes[b][0]} y2={cfg.nodes[b][1]}
+          stroke={lc}
+          strokeWidth="3"
+          vectorEffect="non-scaling-stroke"
+        />
       ))}
-      {/* Alle 12 Speichen (radial durch alle 3 Ringe) */}
-      {Array.from({length:12},(_,k) => {
-        const [ox,oy] = hp(hexR[0],k);
-        const [ix,iy] = hp(hexR[2],k);
-        return <line key={k} x1={ox} y1={oy} x2={ix} y2={iy} stroke={lc} strokeWidth="0.45"/>;
-      })}
-      {/* Alle 36 Knoten */}
-      {hexNodes.map(([x,y],i) =>
-        <circle key={i} cx={x} cy={y} r="0.65" fill={nc}/>
-      )}
+      {cfg.nodes.map(([x, y], i) => (
+        <circle key={`node-${i}`} cx={x} cy={y} r="5" fill={nc} />
+      ))}
     </svg>
   );
 };
@@ -133,20 +86,23 @@ const BoardPreview: React.FC<{ variant: BoardVariant; active: boolean }> = ({ va
 
 interface VBtnProps {
   v: BoardVariant; active: boolean; pc: 2|3;
-  onSelect: (v: BoardVariant) => void; wide?: boolean;
+  onSelect: (v: BoardVariant) => void;
+  onStart: (v: BoardVariant) => void;
+  wide?: boolean;
 }
 
-const VariantButton: React.FC<VBtnProps> = ({ v, active, pc, onSelect, wide }) => (
+const VariantButton: React.FC<VBtnProps> = ({ v, active, pc, onSelect, onStart, wide }) => (
   <button
     id={`muehle-setup-variant-${v}`}
     onClick={() => onSelect(v)}
+    onDoubleClick={() => onStart(v)}
     style={{
       width: '100%',
       padding: '0.5rem 0.375rem',
       borderRadius: '8px',
-      border: active ? '1px solid rgb(245,158,11)' : '1px solid rgb(55,65,81)',
-      background: active ? 'rgba(120,53,15,0.4)' : 'rgb(31,41,55)',
-      color: active ? 'rgb(251,191,36)' : 'rgb(209,213,219)',
+      border: active ? `1px solid ${COLORS.yellow}` : '1px solid rgba(76,46,23,0.32)',
+      background: active ? 'rgba(245,158,11,0.22)' : COLORS.panelStrong,
+      color: active ? COLORS.textStrong : COLORS.text,
       cursor: 'pointer',
       display: 'flex',
       flexDirection: wide ? 'row' : 'column',
@@ -161,7 +117,7 @@ const VariantButton: React.FC<VBtnProps> = ({ v, active, pc, onSelect, wide }) =
       <div style={{ fontSize: '0.7rem', lineHeight: 1.25, fontFamily: "'Exo 2', sans-serif", fontWeight: active ? 700 : 400 }}>
         {BOARD_VARIANT_LABELS[v]}
       </div>
-      <div style={{ fontSize: '0.6rem', color: active ? 'rgba(251,191,36,0.7)' : 'rgb(107,114,128)', marginTop: '1px' }}>
+      <div style={{ fontSize: '0.6rem', color: active ? COLORS.darkUi : COLORS.mutedText, marginTop: '1px' }}>
         {STONES_BY_VARIANT[v][pc]} Scheiben
       </div>
     </div>
@@ -174,8 +130,15 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
   const [playerCount, setPlayerCount] = useState<2 | 3>(2);
   const [boardVariant, setBoardVariant] = useState<BoardVariant>('standard');
   const [names, setNames] = useState<string[]>([
-    DEFAULT_NAMES.WHITE, DEFAULT_NAMES.BLACK, DEFAULT_NAMES.RED,
+    DEFAULT_NAMES.WHITE, DEFAULT_NAMES.BLACK, DEFAULT_NAMES.GREEN,
   ]);
+  const [aiByColor, setAiByColor] = useState<Partial<Record<PlayerColor, boolean>>>({});
+  const playerColors = getPlayerColors(playerCount);
+
+  const changePlayerCount = (count: 2 | 3) => {
+    setPlayerCount(count);
+    setNames(getPlayerColors(count).map(color => DEFAULT_NAMES[color]));
+  };
 
   const updateName = (idx: number, value: string) => {
     const updated = [...names];
@@ -183,16 +146,22 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
     setNames(updated);
   };
 
-  const handleStart = () => {
-    const trimmed = names.slice(0, playerCount).map((n, i) =>
-      n.trim() || DEFAULT_NAMES[PLAYER_COLORS[i]]
+  const toggleAI = (color: PlayerColor) => {
+    setAiByColor(prev => ({ ...prev, [color]: !prev[color] }));
+  };
+
+  const startGame = (count: 2 | 3 = playerCount, variant: BoardVariant = boardVariant) => {
+    const colors = getPlayerColors(count);
+    const useCurrentNames = count === playerCount;
+    const trimmed = colors.map((color, i) =>
+      (useCurrentNames ? names[i]?.trim() : '') || DEFAULT_NAMES[color]
     );
-    onStart(playerCount, trimmed, boardVariant);
+    onStart(count, trimmed, variant, colors.map(color => Boolean(aiByColor[color])));
   };
 
   const cardStyle = (active: boolean): React.CSSProperties => ({
-    background: 'rgba(17,24,39,0.85)',
-    border: `1px solid ${active ? 'rgb(31,41,55)' : 'rgb(31,41,55)'}`,
+    background: active ? COLORS.panelStrong : COLORS.panel,
+    border: '1px solid rgba(76,46,23,0.28)',
     borderRadius: '12px',
     padding: '1.25rem 1.5rem',
     width: '100%',
@@ -201,9 +170,9 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
 
   const btnStyle = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: '0.625rem 0', borderRadius: '8px',
-    border: active ? '1px solid rgb(245,158,11)' : '1px solid rgb(55,65,81)',
-    background: active ? 'rgba(120,53,15,0.4)' : 'rgb(31,41,55)',
-    color: active ? 'rgb(251,191,36)' : 'rgb(209,213,219)',
+    border: active ? `1px solid ${COLORS.yellow}` : '1px solid rgba(76,46,23,0.32)',
+    background: active ? COLORS.darkUi : COLORS.panelStrong,
+    color: active ? '#fffaf0' : COLORS.text,
     cursor: 'pointer', fontFamily: "'Exo 2', sans-serif",
     fontWeight: active ? 700 : 400, fontSize: '0.875rem',
     transition: 'all 0.15s',
@@ -211,89 +180,99 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
 
   return (
     <div id="muehle-setup" style={{
-      minHeight: '100vh', background: 'rgb(3,7,18)',
+      minHeight: '100vh', background: COLORS.appBg,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       padding: '2rem', gap: '1.25rem',
     }}>
       {/* Titel */}
       <div style={{ textAlign: 'center' }}>
-        <h1 id="muehle-setup-title" style={{ ...titleStyle, fontSize: '2.5rem', color: 'white', margin: 0 }}>
+        <h1 id="muehle-setup-title" style={{ ...titleStyle, fontSize: '2.5rem', color: COLORS.textStrong, margin: 0 }}>
           MÜHLE
         </h1>
-        <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 300, color: 'rgb(107,114,128)', marginTop: '0.25rem' }}>
-          Klassisches Brettspiel · Offline PWA
-        </p>
       </div>
 
       {/* Spieleranzahl */}
       <div id="muehle-setup-count" style={cardStyle(false)}>
-        <p style={{ color: 'rgb(156,163,175)', fontSize: '0.7rem', marginBottom: '0.625rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <p style={{ color: COLORS.mutedText, fontSize: '0.7rem', marginBottom: '0.625rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
           Anzahl Spieler
         </p>
         <div style={{ display: 'flex', gap: '0.625rem' }}>
           {([2, 3] as (2|3)[]).map(n => (
             <button key={n} id={`muehle-setup-count-${n}`}
-              onClick={() => setPlayerCount(n)} style={btnStyle(playerCount === n)}
+              onClick={() => changePlayerCount(n)} style={btnStyle(playerCount === n)}
+              onDoubleClick={() => startGame(n)}
             >
               {n} Spieler
             </button>
           ))}
         </div>
-        <p style={{ color: 'rgb(75,85,99)', fontSize: '0.68rem', marginTop: '0.5rem' }}>
-          {playerCount === 2
-            ? `Je ${STONES_BY_VARIANT[boardVariant][2]} Scheiben – klassische Mühle`
-            : `Je ${STONES_BY_VARIANT[boardVariant][3]} Scheiben – letzter Spieler gewinnt`}
-        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginTop: '1rem' }}>
+          <p style={{ color: COLORS.mutedText, fontSize: '0.7rem', marginBottom: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Spielernamen
+          </p>
+          {playerColors.map((color, idx) => (
+            <div key={color} id={`muehle-setup-name-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <DiscPreview color={color} />
+              <input
+                value={names[idx]}
+                onChange={e => updateName(idx, e.target.value)}
+                maxLength={16}
+                placeholder={DEFAULT_NAMES[color]}
+                style={{
+                  flex: 1, background: COLORS.panelStrong, border: '1px solid rgba(76,46,23,0.35)',
+                  borderRadius: '6px', padding: '0.375rem 0.625rem',
+                  color: COLORS.text, fontFamily: "'Exo 2', sans-serif", fontSize: '0.875rem', outline: 'none',
+                }}
+              />
+              <button
+                id={`muehle-setup-ai-${idx}`}
+                onClick={() => toggleAI(color)}
+                style={{
+                  padding: '0.375rem 0.55rem',
+                  minWidth: '42px',
+                  borderRadius: '6px',
+                  border: aiByColor[color] ? `1px solid ${COLORS.yellow}` : '1px solid rgba(76,46,23,0.35)',
+                  background: aiByColor[color] ? COLORS.darkUi : COLORS.panelStrong,
+                  color: aiByColor[color] ? '#fffaf0' : COLORS.text,
+                  fontFamily: "'Exo 2', sans-serif",
+                  fontSize: '0.75rem',
+                  fontWeight: aiByColor[color] ? 700 : 500,
+                  cursor: 'pointer',
+                }}
+                title={aiByColor[color] ? 'KI deaktivieren' : 'KI aktivieren'}
+              >
+                KI
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Spielfeld-Variante */}
       <div id="muehle-setup-variant" style={cardStyle(false)}>
-        <p style={{ color: 'rgb(156,163,175)', fontSize: '0.7rem', marginBottom: '0.625rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <p style={{ color: COLORS.mutedText, fontSize: '0.7rem', marginBottom: '0.625rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
           Spielfeld
         </p>
-        {/* Einheitliches 2×3 Raster – alle 6 Varianten gleich gross */}
+        {/* Einheitliches Raster – alle Varianten gleich gross */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-          {(['standard', 'sonnenmuhle', 'zwolf', 'morabaraba', 'vollmuhle', 'hexagonal'] as BoardVariant[]).map(v => (
+          {(['standard', 'sonnenmuhle', 'zwolf', 'morabaraba', 'vollmuhle', 'hexagonal', 'sonne', 'funfeck'] as BoardVariant[]).map(v => (
             <VariantButton key={v} v={v} active={boardVariant === v} pc={playerCount}
-              onSelect={setBoardVariant} />
+              onSelect={setBoardVariant}
+              onStart={v => startGame(playerCount, v)}
+            />
           ))}
         </div>
-        <p style={{ color: 'rgb(75,85,99)', fontSize: '0.68rem', marginTop: '0.5rem' }}>
-          {BOARD_VARIANT_DESC[boardVariant]}
-        </p>
-      </div>
-
-      {/* Spielernamen */}
-      <div id="muehle-setup-names" style={{ ...cardStyle(false), display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-        <p style={{ color: 'rgb(156,163,175)', fontSize: '0.7rem', marginBottom: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          Spielernamen
-        </p>
-        {PLAYER_COLORS.slice(0, playerCount).map((color, idx) => (
-          <div key={color} id={`muehle-setup-name-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <DiscPreview color={color} />
-            <input
-              value={names[idx]}
-              onChange={e => updateName(idx, e.target.value)}
-              maxLength={16}
-              placeholder={DEFAULT_NAMES[color]}
-              style={{
-                flex: 1, background: 'rgb(31,41,55)', border: '1px solid rgb(55,65,81)',
-                borderRadius: '6px', padding: '0.375rem 0.625rem',
-                color: 'white', fontFamily: "'Exo 2', sans-serif", fontSize: '0.875rem', outline: 'none',
-              }}
-            />
-          </div>
-        ))}
       </div>
 
       {/* Start */}
       <button
         id="muehle-setup-start"
-        onClick={handleStart}
+        onClick={() => startGame()}
         style={{
           padding: '0.75rem 2.5rem', borderRadius: '10px',
-          background: 'rgb(245,158,11)', border: 'none',
-          color: 'rgb(3,7,18)', fontFamily: "'Exo 2', sans-serif",
+          background: COLORS.darkUi, border: 'none',
+          color: '#fffaf0', fontFamily: "'Exo 2', sans-serif",
           fontWeight: 700, fontSize: '1rem', letterSpacing: '0.05em',
           cursor: 'pointer',
         }}
@@ -304,7 +283,7 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
       </button>
 
       <a href="https://www.artur.ch" target="_blank" rel="noopener noreferrer"
-        style={{ fontSize: '10px', color: 'rgba(156,163,175,0.4)', textDecoration: 'none', fontFamily: "'Exo 2', sans-serif" }}
+        style={{ fontSize: '10px', color: 'rgba(116,80,51,0.62)', textDecoration: 'none', fontFamily: "'Exo 2', sans-serif" }}
       >
         © A.N. 05/2026
       </a>

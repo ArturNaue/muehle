@@ -1,8 +1,8 @@
-// v1.2.0 | 2026-05-31 MEZ
+// v1.2.0 | 2026-06-02 MEZ
 
 import React, { useState, useEffect } from 'react';
 import { makeInitialState } from './game/reducer';
-import { PLAYER_COLORS, BoardVariant } from './game/constants';
+import { BoardVariant, getPlayerColors } from './game/constants';
 import GameScreen from './components/GameScreen';
 import Setup from './components/Setup';
 
@@ -19,9 +19,9 @@ function App() {
     return () => window.removeEventListener('sw-update-start', handler);
   }, []);
 
-  const handleStart = (count: 2 | 3, names: string[], boardVariant: BoardVariant) => {
-    const s = makeInitialState(count, boardVariant);
-    PLAYER_COLORS.slice(0, count).forEach((_, i) => {
+  const handleStart = (count: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[]) => {
+    const s = makeInitialState(count, boardVariant, names, aiPlayers);
+    getPlayerColors(count).forEach((_, i) => {
       if (names[i]) s.history[0].players[i].name = names[i];
     });
     setInitialGameState(s);
@@ -55,22 +55,22 @@ export function UpdateOverlay() {
       id="muehle-update-overlay"
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(3,7,18,0.88)',
+        background: 'rgba(76,46,23,0.82)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: '20px',
       }}
     >
       <div style={{
         width: '48px', height: '48px',
-        border: '4px solid rgba(245,158,11,0.2)',
-        borderTopColor: 'rgb(245,158,11)',
+        border: '4px solid rgba(255,245,224,0.32)',
+        borderTopColor: '#f59e0b',
         borderRadius: '50%',
         animation: 'muehle-spin 0.8s linear infinite',
       }} />
-      <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 600, fontSize: '16px', color: 'rgb(245,158,11)', letterSpacing: '0.05em' }}>
+      <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 600, fontSize: '16px', color: '#fff5e0', letterSpacing: '0.05em' }}>
         Neue Version wird geladen…
       </p>
-      <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(156,163,175,0.7)' }}>
+      <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 300, fontSize: '13px', color: 'rgba(255,245,224,0.78)' }}>
         Die App startet automatisch neu.
       </p>
     </div>

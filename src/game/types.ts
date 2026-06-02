@@ -1,6 +1,6 @@
-// v1.1.0 | 2026-05-31 MEZ
+// v1.1.0 | 2026-06-02 MEZ
 
-export type PlayerColor = 'WHITE' | 'BLACK' | 'RED';
+export type PlayerColor = 'WHITE' | 'BLACK' | 'BLUE' | 'RED' | 'GREEN' | 'YELLOW';
 export type GamePhase = 'placing' | 'moving' | 'removing' | 'gameover';
 
 export interface PlayerInfo {
@@ -9,6 +9,7 @@ export interface PlayerInfo {
   stonesInHand: number;  // noch zu platzierende Steine
   stonesOnBoard: number; // Steine auf dem Spielfeld
   eliminated: boolean;
+  isAI: boolean;
 }
 
 /** Ein vollständiger Spielzustand (für Undo/Redo) */

@@ -1,6 +1,6 @@
-// v1.2.0 | 2026-05-31 MEZ
+// v1.2.0 | 2026-06-02 MEZ
 
-import React, { useReducer, useState } from 'react';
+import React, { useEffect, useReducer, useState } from 'react';
 import { gameReducer, makeInitialState } from '../game/reducer';
 import { currentSnapshot } from '../game/types';
 import { BOARD_VARIANT_LABELS } from '../game/constants';
@@ -12,6 +12,17 @@ const titleStyle: React.CSSProperties = {
 };
 const subtitleStyle: React.CSSProperties = {
   fontFamily: "'Exo 2', sans-serif", fontWeight: 300,
+};
+
+const COLORS = {
+  appBg: '#f7e1bd',
+  text: '#3d2412',
+  textStrong: '#3b220f',
+  mutedText: '#745033',
+  darkUi: '#4c2e17',
+  panel: 'rgba(255, 245, 224, 0.84)',
+  panelStrong: 'rgba(255, 250, 238, 0.9)',
+  yellow: '#f59e0b',
 };
 
 interface GameScreenProps {
@@ -33,7 +44,7 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
       id="muehle-menu-confirm"
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        background: 'rgba(3,7,18,0.82)',
+        background: 'rgba(76,46,23,0.58)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '1.5rem',
       }}
@@ -41,25 +52,25 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
     >
       <div
         style={{
-          background: 'rgb(17,24,39)',
-          border: '1px solid rgb(55,65,81)',
+          background: COLORS.panelStrong,
+          border: '1px solid rgba(76,46,23,0.35)',
           borderRadius: '14px',
           padding: '1.75rem 1.5rem',
           maxWidth: '320px', width: '100%',
           display: 'flex', flexDirection: 'column', gap: '1rem',
-          boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
+          boxShadow: '0 25px 50px rgba(61,36,18,0.32)',
         }}
         onClick={e => e.stopPropagation()} // Klick im Kasten nicht weiterleiten
       >
         <p style={{
           fontFamily: "'Exo 2', sans-serif", fontWeight: 700,
-          fontSize: '1.0625rem', color: 'white', margin: 0, textAlign: 'center',
+          fontSize: '1.0625rem', color: COLORS.textStrong, margin: 0, textAlign: 'center',
         }}>
           Spiel verlassen?
         </p>
         <p style={{
           fontFamily: "'Exo 2', sans-serif", fontWeight: 300,
-          fontSize: '0.8125rem', color: 'rgb(156,163,175)', margin: 0, textAlign: 'center',
+          fontSize: '0.8125rem', color: COLORS.mutedText, margin: 0, textAlign: 'center',
         }}>
           Der aktuelle Spielstand geht verloren.
         </p>
@@ -69,9 +80,9 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
             onClick={onStay}
             style={{
               flex: 1, padding: '0.625rem',
-              background: 'rgb(31,41,55)',
-              border: '1px solid rgb(55,65,81)',
-              borderRadius: '8px', color: 'rgb(209,213,219)',
+              background: 'rgba(255,245,224,0.84)',
+              border: '1px solid rgba(76,46,23,0.35)',
+              borderRadius: '8px', color: COLORS.text,
               fontFamily: "'Exo 2', sans-serif", fontWeight: 600,
               fontSize: '0.875rem', cursor: 'pointer',
             }}
@@ -83,9 +94,9 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
             onClick={onLeave}
             style={{
               flex: 1, padding: '0.625rem',
-              background: 'rgba(185,28,28,0.3)',
-              border: '1px solid rgb(127,29,29)',
-              borderRadius: '8px', color: 'rgb(252,165,165)',
+              background: COLORS.darkUi,
+              border: `1px solid ${COLORS.darkUi}`,
+              borderRadius: '8px', color: '#fffaf0',
               fontFamily: "'Exo 2', sans-serif", fontWeight: 600,
               fontSize: '0.875rem', cursor: 'pointer',
             }}
@@ -109,6 +120,13 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
 
   const canUndo = state.historyIndex > 0;
   const canRedo = state.historyIndex < state.history.length - 1;
+
+  useEffect(() => {
+    const currentPlayer = snap.players[snap.currentPlayerIndex];
+    if (!currentPlayer?.isAI || snap.winner !== null || showMenuConfirm) return;
+    const timer = window.setTimeout(() => dispatch({ type: 'AI_MOVE' }), 450);
+    return () => window.clearTimeout(timer);
+  }, [snap, showMenuConfirm]);
 
   const handleMenuClick = () => {
     // Im Gameover oder wenn noch kein Zug gemacht wurde: direkt zum Menü
@@ -160,7 +178,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
         id={`muehle-heading-${pos}`}
         style={{
           ...titleStyle,
-          fontSize: '1.875rem', color: 'white', textTransform: 'uppercase',
+          fontSize: '1.875rem', color: COLORS.textStrong, textTransform: 'uppercase',
           textAlign: 'center', margin: 0,
           transform: flipped ? 'rotate(180deg)' : undefined,
         }}
@@ -177,7 +195,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
         id={`muehle-subtitle-${pos}`}
         style={{
           ...subtitleStyle,
-          color: 'rgb(107,114,128)', fontSize: '0.8125rem',
+          color: COLORS.mutedText, fontSize: '0.8125rem',
           textAlign: 'center', margin: 0,
           transform: flipped ? 'rotate(180deg)' : undefined,
         }}
@@ -194,7 +212,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
         id={`muehle-attribution-${pos}`}
         href="https://www.artur.ch" target="_blank" rel="noopener noreferrer"
         style={{
-          fontSize: '10px', color: 'rgba(156,163,175,0.5)',
+          fontSize: '10px', color: 'rgba(116,80,51,0.6)',
           textDecoration: 'none', fontFamily: "'Exo 2', sans-serif",
           transform: flipped ? 'rotate(180deg)' : undefined,
           display: 'block', textAlign: 'center',
@@ -209,7 +227,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
     <div
       id="muehle-app-root"
       className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 gap-4"
-      style={{ position: 'relative' }}
+      style={{ position: 'relative', background: COLORS.appBg }}
     >
       {swUpdating && <UpdateOverlay />}
 

@@ -1,12 +1,13 @@
-// v1.1.0 | 2026-05-31 MEZ
+// v1.1.0 | 2026-06-02 MEZ
 
 import { GameState, GameSnapshot, GamePhase, PlayerInfo, PlayerColor, currentSnapshot } from './types';
-import { BoardVariant, BoardConfig, getBoardConfig, STONES_BY_VARIANT, PLAYER_COLORS, DEFAULT_NAMES } from './constants';
+import { BoardVariant, BoardConfig, getBoardConfig, STONES_BY_VARIANT, DEFAULT_NAMES, getPlayerColors } from './constants';
 
 // ─── Action Types ────────────────────────────────────────────────────────────
 
 export type GameAction =
   | { type: 'CLICK_NODE'; node: number }
+  | { type: 'AI_MOVE' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'SET_NAME'; playerIndex: number; name: string }
@@ -165,17 +166,109 @@ function handleClickNode(snap: GameSnapshot, node: number, playerCount: number, 
   return null;
 }
 
+function scorePlace(board: (PlayerColor | null)[], node: number, color: PlayerColor, opponents: PlayerColor[], cfg: BoardConfig): number {
+  const b = [...board];
+  b[node] = color;
+  let score = formsNewMill(b, node, color, cfg) ? 1000 : 0;
+  for (const opponent of opponents) {
+    const test = [...board];
+    test[node] = opponent;
+    if (formsNewMill(test, node, opponent, cfg)) score += 180;
+  }
+  score += cfg.neighbors[node].filter(n => board[n] === color).length * 8;
+  return score;
+}
+
+function chooseBestPlace(snap: GameSnapshot, cfg: BoardConfig): number | null {
+  const { board, players, currentPlayerIndex } = snap;
+  const color = players[currentPlayerIndex].color;
+  const opponents = players
+    .filter((p, i) => i !== currentPlayerIndex && !p.eliminated)
+    .map(p => p.color);
+  let best: { node: number; score: number } | null = null;
+  for (let node = 0; node < board.length; node++) {
+    if (board[node] !== null) continue;
+    const score = scorePlace(board, node, color, opponents, cfg);
+    if (!best || score > best.score) best = { node, score };
+  }
+  return best?.node ?? null;
+}
+
+function chooseBestMove(snap: GameSnapshot, cfg: BoardConfig): [number, number] | null {
+  const { board, players, currentPlayerIndex } = snap;
+  const player = players[currentPlayerIndex];
+  const color = player.color;
+  const canJump = player.stonesOnBoard <= 3;
+  let best: { from: number; to: number; score: number } | null = null;
+
+  for (let from = 0; from < board.length; from++) {
+    if (board[from] !== color) continue;
+    const targets = canJump
+      ? board.map((v, i) => (v === null ? i : -1)).filter(i => i >= 0)
+      : cfg.neighbors[from].filter(to => board[to] === null);
+    for (const to of targets) {
+      const b = [...board];
+      b[from] = null;
+      b[to] = color;
+      const score = (formsNewMill(b, to, color, cfg) ? 1000 : 0) + cfg.neighbors[to].filter(n => b[n] === color).length * 8;
+      if (!best || score > best.score) best = { from, to, score };
+    }
+  }
+
+  return best ? [best.from, best.to] : null;
+}
+
+function chooseBestRemove(snap: GameSnapshot, cfg: BoardConfig): number | null {
+  const { board, players, currentPlayerIndex } = snap;
+  const opponentColors = players
+    .filter((p, i) => i !== currentPlayerIndex && !p.eliminated)
+    .map(p => p.color);
+  const eligible = getEligibleRemoves(board, opponentColors, cfg);
+  if (eligible.length === 0) return null;
+  return eligible
+    .map(node => ({
+      node,
+      score: cfg.neighbors[node].filter(n => board[n] === board[node]).length + (isInMill(board, node, cfg) ? 0 : 5),
+    }))
+    .sort((a, b) => b.score - a.score)[0].node;
+}
+
+function handleAIMove(snap: GameSnapshot, playerCount: number, cfg: BoardConfig): GameSnapshot | null {
+  const currentPlayer = snap.players[snap.currentPlayerIndex];
+  if (!currentPlayer.isAI || currentPlayer.eliminated || snap.winner !== null) return null;
+
+  if (snap.phase === 'placing') {
+    const node = chooseBestPlace(snap, cfg);
+    return node === null ? null : handleClickNode(snap, node, playerCount, cfg);
+  }
+
+  if (snap.phase === 'moving') {
+    const move = chooseBestMove(snap, cfg);
+    if (!move) return null;
+    const selected = handleClickNode(snap, move[0], playerCount, cfg);
+    return selected ? handleClickNode(selected, move[1], playerCount, cfg) : null;
+  }
+
+  if (snap.phase === 'removing') {
+    const node = chooseBestRemove(snap, cfg);
+    return node === null ? null : handleClickNode(snap, node, playerCount, cfg);
+  }
+
+  return null;
+}
+
 // ─── Initial State ───────────────────────────────────────────────────────────
 
-function makeInitialSnapshot(playerCount: 2 | 3, boardVariant: BoardVariant): GameSnapshot {
+function makeInitialSnapshot(playerCount: 2 | 3, boardVariant: BoardVariant, names: string[] = [], aiPlayers: boolean[] = []): GameSnapshot {
   const cfg = getBoardConfig(boardVariant);
   const stonesPerPlayer = STONES_BY_VARIANT[boardVariant][playerCount];
-  const players: PlayerInfo[] = PLAYER_COLORS.slice(0, playerCount).map(color => ({
-    name: DEFAULT_NAMES[color],
+  const players: PlayerInfo[] = getPlayerColors(playerCount).map((color, i) => ({
+    name: names[i] || DEFAULT_NAMES[color],
     color,
     stonesInHand: stonesPerPlayer,
     stonesOnBoard: 0,
     eliminated: false,
+    isAI: Boolean(aiPlayers[i]),
   }));
   return {
     board: Array(cfg.nodes.length).fill(null),
@@ -187,11 +280,11 @@ function makeInitialSnapshot(playerCount: 2 | 3, boardVariant: BoardVariant): Ga
   };
 }
 
-export function makeInitialState(playerCount: 2 | 3, boardVariant: BoardVariant = 'standard'): GameState {
+export function makeInitialState(playerCount: 2 | 3, boardVariant: BoardVariant = 'standard', names: string[] = [], aiPlayers: boolean[] = []): GameState {
   return {
     playerCount,
     boardVariant,
-    history: [makeInitialSnapshot(playerCount, boardVariant)],
+    history: [makeInitialSnapshot(playerCount, boardVariant, names, aiPlayers)],
     historyIndex: 0,
   };
 }
@@ -205,6 +298,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const snap = currentSnapshot(state);
       const cfg = getBoardConfig(state.boardVariant);
       const newSnap = handleClickNode(snap, action.node, state.playerCount, cfg);
+      if (!newSnap) return state;
+      const newHistory = [...state.history.slice(0, state.historyIndex + 1), newSnap];
+      return { ...state, history: newHistory, historyIndex: newHistory.length - 1 };
+    }
+
+    case 'AI_MOVE': {
+      const snap = currentSnapshot(state);
+      const cfg = getBoardConfig(state.boardVariant);
+      const newSnap = handleAIMove(snap, state.playerCount, cfg);
       if (!newSnap) return state;
       const newHistory = [...state.history.slice(0, state.historyIndex + 1), newSnap];
       return { ...state, history: newHistory, historyIndex: newHistory.length - 1 };
@@ -228,8 +330,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, history: newHistory };
     }
 
-    case 'NEW_GAME':
-      return makeInitialState(state.playerCount, state.boardVariant);
+    case 'NEW_GAME': {
+      const snap = currentSnapshot(state);
+      return makeInitialState(
+        state.playerCount,
+        state.boardVariant,
+        snap.players.map(p => p.name),
+        snap.players.map(p => p.isAI)
+      );
+    }
 
 
     default:

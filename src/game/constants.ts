@@ -1,26 +1,30 @@
-// v1.4.0 | 2026-05-31 MEZ
+// v1.4.0 | 2026-06-02 MEZ
 import { PlayerColor } from './types';
 
 // ─── Board Variant ────────────────────────────────────────────────────────────
 
-export type BoardVariant = 'standard' | 'sonnenmuhle' | 'zwolf' | 'morabaraba' | 'vollmuhle' | 'hexagonal';
+export type BoardVariant = 'standard' | 'sonnenmuhle' | 'zwolf' | 'morabaraba' | 'vollmuhle' | 'hexagonal' | 'sonne' | 'funfeck';
 
 export const BOARD_VARIANT_LABELS: Record<BoardVariant, string> = {
-  standard:    'Standard-Mühle',
-  sonnenmuhle: 'Sonnenmühle',
-  zwolf:       'Zwölf-Mann-Mühle',
+  standard:    'Klassische Mühle',
+  sonnenmuhle: 'Eckdiagonal-Mühle',
+  zwolf:       '12-Stein-Mühle',
   morabaraba:  'Morabaraba',
-  vollmuhle:   'Vollmühle',
-  hexagonal:   'Sechseck-Mühle',
+  vollmuhle:   'Alle-Diagonalen-Mühle',
+  hexagonal:   'Wabenmühle',
+  sonne:        'Sonnenmühle',
+  funfeck:      'Fünfeck-Mühle',
 };
 
 export const BOARD_VARIANT_DESC: Record<BoardVariant, string> = {
   standard:    '3 Ringe · 16 Mühlen · 9 Steine',
-  sonnenmuhle: '3 Ringe · 20 Mühlen · 9 Steine · Eck-Diagonalen',
-  zwolf:       '3 Ringe · 16 Mühlen · 12 Steine',
-  morabaraba:  '3 Ringe · 16 Mühlen · 12 Steine · X-Diagonalen',
-  vollmuhle:   '3 Ringe · 20 Mühlen · 9 Steine · alle Diagonalen',
+  sonnenmuhle: '3 Ringe · 20 Mühlen · 9 Steine · Eckdiagonalen',
+  zwolf:       'Standardbrett · 16 Mühlen · 12 Steine',
+  morabaraba:  '3 Ringe · 20 Mühlen · 12 Steine · Eckdiagonalen',
+  vollmuhle:   '3 Ringe · 20 Mühlen · 9 Steine · Eck- und X-Diagonalen',
   hexagonal:   '3 Sechsecke · 30 Mühlen · 10 Steine · 36 Knoten',
+  sonne:        '32 Punkte · 21 Mühlen · 12 Steine · Sonnenbrett',
+  funfeck:      '3 Fünfecke · 25 Mühlen · 10 Steine · 30 Knoten',
 };
 
 /** Steine pro Spieler je Variante und Spieleranzahl */
@@ -31,7 +35,18 @@ export const STONES_BY_VARIANT: Record<BoardVariant, Record<2|3, number>> = {
   morabaraba:  { 2: 12, 3: 7 },
   vollmuhle:   { 2: 9,  3: 6 },
   hexagonal:   { 2: 10, 3: 7 },
+  sonne:        { 2: 12, 3: 8 },
+  funfeck:      { 2: 10, 3: 7 },
 };
+
+function buildNeighbors(nodeCount: number, edges: [number, number][]): number[][] {
+  const neighbors = Array.from({ length: nodeCount }, () => [] as number[]);
+  for (const [a, b] of edges) {
+    neighbors[a].push(b);
+    neighbors[b].push(a);
+  }
+  return neighbors;
+}
 
 // ─── Standard-Mühle Board (24 Knoten, 3 konzentrische Quadrate) ───────────────
 //
@@ -100,7 +115,7 @@ const STANDARD_NEIGHBORS: number[][] = [
   [20,22],        // 23
 ];
 
-// ─── Sonnenmühle: Eck-Diagonalen zwischen Ringen ──────────────────────────────
+// ─── Eckdiagonal-Mühle / Morabaraba: Eck-Diagonalen zwischen Ringen ──────────
 // Verbindet Ecken benachbarter Ringe: [0↔8↔16], [2↔10↔18], [5↔13↔21], [7↔15↔23]
 // Erzeugt 4 neue Mühlen entlang der Diagonalen.
 
@@ -139,15 +154,15 @@ const SONNENMUHLE_NEIGHBORS: number[][] = [
   [20,22,15],      // 23
 ];
 
-// ─── Morabaraba: X-Diagonalen (Mittelpunkte → Ecken nächster Ring) ─────────────
+// ─── X-Diagonalen (Mittelpunkte → Ecken nächster Ring) ───────────────────────
 // 16 zusätzliche Kanten, je 8 X-Muster, keine neuen Mühlen.
 
-const MORABARABA_EXTRA_EDGES: [number, number][] = [
+const X_DIAGONAL_EXTRA_EDGES: [number, number][] = [
   [1,8],[1,10],[4,10],[4,15],[6,13],[6,15],[3,8],[3,13],
   [9,16],[9,18],[12,18],[12,23],[14,21],[14,23],[11,16],[11,21],
 ];
 
-const MORABARABA_NEIGHBORS: number[][] = [
+const X_DIAGONAL_NEIGHBORS: number[][] = [
   [1,3],               // 0
   [0,2,9, 8,10],       // 1
   [1,4],               // 2
@@ -174,11 +189,11 @@ const MORABARABA_NEIGHBORS: number[][] = [
   [20,22, 12,14],      // 23
 ];
 
-// ─── Vollmühle: Sonnenmühle + Morabaraba kombiniert ──────────────────────────
+// ─── Alle-Diagonalen-Mühle: Eckdiagonalen + X-Diagonalen kombiniert ──────────
 // Alle 24 Diagonal-Kanten auf einmal:
-//   - 8 Eck-Diagonalen  (wie Sonnenmühle)
-//   - 16 X-Diagonalen   (wie Morabaraba)
-// Mühlen: Standard-16 + Sonnenmühle-4 = 20
+//   - 8 Eck-Diagonalen
+//   - 16 X-Diagonalen
+// Mühlen: Standard-16 + Eckdiagonal-4 = 20
 // NEIGHBORS: Vereinigung beider Varianten
 
 const VOLLMUHLE_NEIGHBORS: number[][] = [
@@ -208,7 +223,7 @@ const VOLLMUHLE_NEIGHBORS: number[][] = [
   [20,22, 15, 12,14],    // 23 (sonne: +15  morab: +12,+14)
 ];
 
-// ─── Sechseck-Mühle (Hexagonal Morris) ───────────────────────────────────────
+// ─── Wabenmühle / Sechseck-Mühle (Hexagonal Morris) ──────────────────────────
 //
 // 3 konzentrische Sechsecke, je 12 Knoten (6 Ecken + 6 Seitenmittelpunkte)
 // = 36 Knoten total (0–35).
@@ -288,6 +303,70 @@ const HEX_NEIGHBORS: number[][] = [
   [29,31,18],[30,32,19],[31,33,20],[32,34,21],[33,35,22],[34,24,23],
 ];
 
+// ─── Sonnenmühle (32 Punkte aus M5.svg) ──────────────────────────────────────
+//
+// Aus dem SVG extrahierte Rasterform. Die Kanten wurden an Zwischenpunkten
+// gesplittet, damit alle Bewegungen zwischen benachbarten Punkten erfolgen.
+
+const SUN_NODES: [number, number][] = [
+  [-40,-120],[ -80,-120],[   0,-120],
+  [ -40, -80],[  40, -80],[   0, -80],[ 120, -80],
+  [ -40, -40],[ -80, -40],[  40, -40],[   0, -40],[  80, -40],[ 120, -40],
+  [ -40,   0],[-120,   0],[ -80,   0],[  40,   0],[  80,   0],[ 120,   0],
+  [ -40,  40],[-120,  40],[ -80,  40],[  40,  40],[   0,  40],[  80,  40],
+  [ -40,  80],[-120,  80],[  40,  80],[   0,  80],
+  [  40, 120],[   0, 120],[  80, 120],
+];
+
+const SUN_EDGES: [number, number][] = [
+  [0,1],[0,2],[1,3],[2,4],[3,5],[3,8],[3,10],[4,5],
+  [6,11],[6,12],[7,10],[7,13],[7,15],[8,14],[8,15],
+  [9,10],[9,16],[11,16],[11,17],[12,17],[12,18],[4,11],[0,9],
+  [13,19],[13,21],[14,20],[15,20],[15,21],[16,22],
+  [17,22],[17,24],[18,24],[19,23],[19,28],[20,26],
+  [21,25],[21,26],[22,23],[23,27],[24,27],[25,28],
+  [25,30],[27,28],[27,31],[28,29],[29,30],[29,31],
+];
+
+const SUN_MILLS: number[][] = [
+  [7,10,9],[7,13,19],[19,23,22],[22,16,9],[10,3,1],
+  [1,0,2],[6,12,18],[6,11,16],[12,17,22],[18,24,27],
+  [3,8,14],[7,15,20],[13,21,26],[21,25,30],[23,27,31],
+  [30,29,31],[14,20,26],[8,15,21],[3,5,4],[11,17,24],
+  [25,28,27],
+];
+
+const SUN_NEIGHBORS = buildNeighbors(SUN_NODES.length, SUN_EDGES);
+
+// ─── Fünfeck-Mühle ───────────────────────────────────────────────────────────
+//
+// Drei konzentrische Fünfecke mit Eck- und Seitenmittelpunkten.
+// Mühlen entstehen entlang jeder Fünfeck-Seite und auf allen radialen Linien.
+
+const PENTAGON_NODES: [number, number][] = [
+  [0,-125],[60,-82],[119,-39],[96,31],[73,101],[0,101],[-73,101],[-96,31],[-119,-39],[-59,-82],
+  [0,-85],[41,-55],[81,-26],[66,22],[50,69],[0,69],[-50,69],[-65,22],[-81,-26],[-40,-55],
+  [0,-45],[22,-29],[43,-14],[35,11],[26,36],[0,36],[-26,36],[-34,11],[-43,-14],[-21,-29],
+];
+
+const PENTAGON_EDGES: [number, number][] = [
+  [0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,0],
+  [10,11],[11,12],[12,13],[13,14],[14,15],[15,16],[16,17],[17,18],[18,19],[19,10],
+  [20,21],[21,22],[22,23],[23,24],[24,25],[25,26],[26,27],[27,28],[28,29],[29,20],
+  [0,10],[10,20],[1,11],[11,21],[2,12],[12,22],[3,13],[13,23],[4,14],[14,24],
+  [5,15],[15,25],[6,16],[16,26],[7,17],[17,27],[8,18],[18,28],[9,19],[19,29],
+];
+
+const PENTAGON_MILLS: number[][] = [
+  [0,1,2],[2,3,4],[4,5,6],[6,7,8],[8,9,0],
+  [10,11,12],[12,13,14],[14,15,16],[16,17,18],[18,19,10],
+  [20,21,22],[22,23,24],[24,25,26],[26,27,28],[28,29,20],
+  [0,10,20],[1,11,21],[2,12,22],[3,13,23],[4,14,24],
+  [5,15,25],[6,16,26],[7,17,27],[8,18,28],[9,19,29],
+];
+
+const PENTAGON_NEIGHBORS = buildNeighbors(PENTAGON_NODES.length, PENTAGON_EDGES);
+
 // ─── Board Config ─────────────────────────────────────────────────────────────
 
 export interface BoardConfig {
@@ -316,14 +395,14 @@ export function getBoardConfig(variant: BoardVariant): BoardConfig {
     case 'morabaraba':
       return {
         nodes:     STANDARD_NODES,
-        edges:     [...STANDARD_EDGES, ...MORABARABA_EXTRA_EDGES],
-        mills:     STANDARD_MILLS,
-        neighbors: MORABARABA_NEIGHBORS,
+        edges:     [...STANDARD_EDGES, ...SONNENMUHLE_EXTRA_EDGES],
+        mills:     [...STANDARD_MILLS, ...SONNENMUHLE_EXTRA_MILLS],
+        neighbors: SONNENMUHLE_NEIGHBORS,
       };
     case 'vollmuhle':
       return {
         nodes:     STANDARD_NODES,
-        edges:     [...STANDARD_EDGES, ...SONNENMUHLE_EXTRA_EDGES, ...MORABARABA_EXTRA_EDGES],
+        edges:     [...STANDARD_EDGES, ...SONNENMUHLE_EXTRA_EDGES, ...X_DIAGONAL_EXTRA_EDGES],
         mills:     [...STANDARD_MILLS, ...SONNENMUHLE_EXTRA_MILLS],
         neighbors: VOLLMUHLE_NEIGHBORS,
       };
@@ -333,6 +412,20 @@ export function getBoardConfig(variant: BoardVariant): BoardConfig {
         edges:     HEX_EDGES,
         mills:     HEX_MILLS,
         neighbors: HEX_NEIGHBORS,
+      };
+    case 'sonne':
+      return {
+        nodes:     SUN_NODES,
+        edges:     SUN_EDGES,
+        mills:     SUN_MILLS,
+        neighbors: SUN_NEIGHBORS,
+      };
+    case 'funfeck':
+      return {
+        nodes:     PENTAGON_NODES,
+        edges:     PENTAGON_EDGES,
+        mills:     PENTAGON_MILLS,
+        neighbors: PENTAGON_NEIGHBORS,
       };
     default: // 'standard'
       return {
@@ -347,12 +440,18 @@ export function getBoardConfig(variant: BoardVariant): BoardConfig {
 /** @deprecated Verwende STONES_BY_VARIANT[variant][playerCount] */
 export const STONES_PER_PLAYER: Record<number, number> = { 2: 9, 3: 6 };
 
-export const PLAYER_COLORS: PlayerColor[] = ['WHITE', 'BLACK', 'RED'];
+export const PLAYER_COLORS_2P: PlayerColor[] = ['WHITE', 'BLACK'];
+export const PLAYER_COLORS_3P: PlayerColor[] = ['BLUE', 'RED', 'GREEN'];
+export const PLAYER_COLORS: PlayerColor[] = PLAYER_COLORS_3P;
+
+export function getPlayerColors(playerCount: 2 | 3): PlayerColor[] {
+  return playerCount === 2 ? PLAYER_COLORS_2P : PLAYER_COLORS_3P;
+}
 
 export const COLOR_DISPLAY: Record<PlayerColor, string> = {
-  WHITE: 'Weiss', BLACK: 'Schwarz', RED: 'Rot',
+  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb',
 };
 
 export const DEFAULT_NAMES: Record<PlayerColor, string> = {
-  WHITE: 'Weiss', BLACK: 'Schwarz', RED: 'Rot',
+  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb',
 };

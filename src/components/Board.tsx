@@ -1,6 +1,6 @@
-// v1.1.0 | 2026-05-31 MEZ
+// v1.1.0 | 2026-06-02 MEZ
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { GameSnapshot, PlayerColor } from '../game/types';
 import { getBoardConfig, BoardVariant } from '../game/constants';
 import { GameAction } from '../game/reducer';
@@ -13,6 +13,26 @@ const HOLE_R  = 3;
 const DISC_R  = 12;
 // Klickbereich (unsichtbar, grösser als Scheibe für komfortables Tippen)
 const HIT_R   = 16;
+
+const COLORS = {
+  board: '#d99a52',
+  boardLine: '#8a5329',
+  darkUi: '#4c2e17',
+  text: '#3d2412',
+  mutedText: '#745033',
+  panel: 'rgba(255, 245, 224, 0.84)',
+  panelStrong: 'rgba(255, 250, 238, 0.9)',
+  yellow: '#f59e0b',
+};
+
+const PLAYER_DISC: Record<PlayerColor, { fill: string; stroke: string; shine: number }> = {
+  WHITE: { fill: '#f8f1df', stroke: '#bfae8f', shine: 0.62 },
+  BLACK: { fill: '#2b2118', stroke: '#0f0a06', shine: 0.18 },
+  BLUE: { fill: '#2563eb', stroke: '#173a9a', shine: 0.42 },
+  RED: { fill: '#f43f5e', stroke: '#9f1239', shine: 0.38 },
+  GREEN: { fill: '#22c55e', stroke: '#15803d', shine: 0.42 },
+  YELLOW: { fill: '#f59e0b', stroke: '#92400e', shine: 0.5 },
+};
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
 
@@ -64,22 +84,18 @@ interface DiscProps {
 
 /** Flache Scheibe (kein 3D-Gradient) mit Rahmen und Schatten */
 const Disc: React.FC<DiscProps> = ({ color, selected, removeHighlight, r: DISC_R }) => {
-  const fill =
-    color === 'WHITE' ? 'rgb(230,230,220)' :
-    color === 'BLACK' ? 'rgb(28,28,33)'    :
-    /* RED */           'rgb(176,22,22)';
+  const disc = PLAYER_DISC[color];
+  const fill = disc.fill;
 
   const stroke =
-    removeHighlight  ? 'rgb(252,165,165)' :
-    selected         ? 'rgb(251,191,36)'  :
-    color === 'WHITE'? 'rgb(170,170,160)' :
-    color === 'BLACK'? 'rgb(65,65,72)'    :
-    /* RED */          'rgb(120,10,10)';
+    removeHighlight  ? '#fff5e0' :
+    selected         ? COLORS.yellow :
+    disc.stroke;
 
   const strokeWidth = selected || removeHighlight ? 2.5 : 1.5;
 
   // Kleiner Glanzpunkt oben-links (subtil, kein 3D-Effekt)
-  const shineOpacity = color === 'BLACK' ? 0.15 : 0.45;
+  const shineOpacity = disc.shine;
 
   return (
     <g>
@@ -88,7 +104,7 @@ const Disc: React.FC<DiscProps> = ({ color, selected, removeHighlight, r: DISC_R
         fill={fill}
         stroke={stroke}
         strokeWidth={strokeWidth}
-        style={{ filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.6))' }}
+        style={{ filter: 'drop-shadow(0 3px 5px rgba(61,36,18,0.45))' }}
         className={removeHighlight ? 'muehle-pulse' : ''}
       />
       {/* Glanzpunkt */}
@@ -114,6 +130,26 @@ interface BoardProps {
 
 const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch }) => {
   const { board, players, currentPlayerIndex, phase, selectedNode, winner } = snap;
+  const svgRef = useRef<SVGSVGElement>(null);
+  const suppressClickRef = useRef(false);
+  const dragRef = useRef<{
+    from: number;
+    color: PlayerColor;
+    startClientX: number;
+    startClientY: number;
+    x: number;
+    y: number;
+    active: boolean;
+  } | null>(null);
+  const [drag, setDrag] = useState<{
+    from: number;
+    color: PlayerColor;
+    startClientX: number;
+    startClientY: number;
+    x: number;
+    y: number;
+    active: boolean;
+  } | null>(null);
   const cfg = useMemo(() => getBoardConfig(boardVariant), [boardVariant]);
 
   // Scheibenradius: für Sechseck-Mühle kleiner (innere Knoten sind eng),
@@ -148,6 +184,82 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
   const currentPlayer = players[currentPlayerIndex];
   const currentColor  = currentPlayer.color;
   const canJump = currentPlayer.stonesOnBoard <= 3 && currentPlayer.stonesInHand === 0;
+
+  const getSvgPoint = (clientX: number, clientY: number): [number, number] | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const point = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    return [point.x, point.y];
+  };
+
+  const getDropTarget = (from: number, x: number, y: number): number | null => {
+    const targets = canJump
+      ? board.map((value, idx) => (value === null ? idx : -1)).filter(idx => idx >= 0)
+      : cfg.neighbors[from].filter(idx => board[idx] === null);
+    let best: { node: number; distance: number } | null = null;
+    for (const node of targets) {
+      const [nx, ny] = cfg.nodes[node];
+      const distance = Math.hypot(nx - x, ny - y);
+      if (!best || distance < best.distance) best = { node, distance };
+    }
+    return best && best.distance <= HIT_R * 1.75 ? best.node : null;
+  };
+
+  const beginDrag = (from: number, color: PlayerColor, clientX: number, clientY: number): boolean => {
+    const point = getSvgPoint(clientX, clientY);
+    if (!point) return false;
+    const nextDrag = {
+      from,
+      color,
+      startClientX: clientX,
+      startClientY: clientY,
+      x: point[0],
+      y: point[1],
+      active: false,
+    };
+    dragRef.current = nextDrag;
+    setDrag(nextDrag);
+    return true;
+  };
+
+  const updateDrag = (clientX: number, clientY: number): boolean => {
+    const currentDrag = dragRef.current;
+    if (!currentDrag) return false;
+    const point = getSvgPoint(clientX, clientY);
+    if (!point) return currentDrag.active;
+    const moved = Math.hypot(clientX - currentDrag.startClientX, clientY - currentDrag.startClientY);
+    const nextDrag = {
+      ...currentDrag,
+      x: point[0],
+      y: point[1],
+      active: currentDrag.active || moved > 5,
+    };
+    dragRef.current = nextDrag;
+    setDrag(nextDrag);
+    return nextDrag.active;
+  };
+
+  const finishDrag = (clientX: number, clientY: number): boolean => {
+    const currentDrag = dragRef.current;
+    if (!currentDrag) return false;
+    const point = getSvgPoint(clientX, clientY);
+    const target = point ? getDropTarget(currentDrag.from, point[0], point[1]) : null;
+    const wasActive = currentDrag.active;
+
+    if (wasActive) {
+      suppressClickRef.current = true;
+      if (target !== null) {
+        if (selectedNode !== currentDrag.from) dispatch({ type: 'CLICK_NODE', node: currentDrag.from });
+        dispatch({ type: 'CLICK_NODE', node: target });
+      }
+    }
+
+    dragRef.current = null;
+    setDrag(null);
+    return wasActive;
+  };
 
   const moveTargets = useMemo(() =>
     phase === 'moving'
@@ -211,8 +323,9 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             flex: 1,
             transform: flipped ? 'rotate(180deg)' : undefined,
             cursor: selectedNode !== null && phase === 'moving' ? 'pointer' : 'default',
-            borderColor: currentPlayerIndex === pidx && !winner ? 'rgb(245,158,11)' : undefined,
-            background: currentPlayerIndex === pidx && !winner ? 'rgba(120,53,15,0.35)' : undefined,
+            borderColor: currentPlayerIndex === pidx && !winner ? COLORS.yellow : undefined,
+            background: currentPlayerIndex === pidx && !winner ? 'rgba(245,158,11,0.24)' : undefined,
+            color: currentPlayerIndex === pidx && !winner ? COLORS.text : undefined,
           }}
           className="muehle-status-btn"
         >{statusText}</button>
@@ -232,7 +345,7 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
     <div
       id="muehle-board-container"
       className="muehle-board-container"
-      style={{ position: 'relative', background: 'rgb(45,55,72)', borderRadius: '1rem' }}
+      style={{ position: 'relative', background: COLORS.board, borderRadius: '1rem' }}
     >
       {is2Player && cardRow2P(true)}
       {is2Player && cardRow2P(false)}
@@ -261,10 +374,39 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
 
       {/* SVG Spielfeld */}
       <svg
+        ref={svgRef}
         id="muehle-board-svg"
         viewBox={svgViewBox}
         className="muehle-board-svg"
-        style={{ width: '100%', display: 'block', userSelect: 'none' }}
+        onPointerMove={event => {
+          if (updateDrag(event.clientX, event.clientY)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onPointerUp={event => {
+          if (finishDrag(event.clientX, event.clientY)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onPointerCancel={() => {
+          dragRef.current = null;
+          setDrag(null);
+        }}
+        onMouseMove={event => {
+          if (updateDrag(event.clientX, event.clientY)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onMouseUp={event => {
+          if (finishDrag(event.clientX, event.clientY)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        style={{ width: '100%', display: 'block', userSelect: 'none', touchAction: 'none' }}
       >
         {/* Board-Linien */}
         {cfg.edges.map(([a, b_], i) => (
@@ -272,7 +414,7 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             key={`edge-${i}`}
             x1={cfg.nodes[a][0]} y1={cfg.nodes[a][1]}
             x2={cfg.nodes[b_][0]} y2={cfg.nodes[b_][1]}
-            stroke="rgb(80,95,115)"
+            stroke={COLORS.boardLine}
             strokeWidth="2"
           />
         ))}
@@ -291,7 +433,30 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             <g
               key={`node-${idx}`}
               transform={`translate(${x},${y})`}
-              onClick={() => dispatch({ type: 'CLICK_NODE', node: idx })}
+              onClick={event => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return;
+                }
+                dispatch({ type: 'CLICK_NODE', node: idx });
+              }}
+              onPointerDown={event => {
+                if (winner !== null || phase !== 'moving' || stoneColor !== currentColor) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                if (beginDrag(idx, stoneColor, event.clientX, event.clientY)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
+              onMouseDown={event => {
+                if (winner !== null || phase !== 'moving' || stoneColor !== currentColor || dragRef.current) return;
+                if (beginDrag(idx, stoneColor, event.clientX, event.clientY)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }}
               style={{ cursor: winner !== null ? 'default' : 'pointer' }}
             >
               {/* Unsichtbarer grosser Klickbereich */}
@@ -301,8 +466,8 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
               {isEmpty && (
                 <circle
                   r={HOLE_R}
-                  fill={isMoveTarget ? 'rgb(80,50,15)' : 'rgb(30,37,48)'}
-                  stroke={isMoveTarget ? 'rgb(245,158,11)' : 'rgb(20,25,35)'}
+                  fill={isMoveTarget ? '#fff5e0' : '#6b3f1f'}
+                  stroke={isMoveTarget ? COLORS.yellow : COLORS.darkUi}
                   strokeWidth="1"
                   className={isMoveTarget ? 'muehle-pulse' : ''}
                 />
@@ -310,7 +475,7 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
 
               {/* Ziel-Punkt bei leerem Move-Target */}
               {isMoveTarget && isEmpty && (
-                <circle r={HOLE_R * 0.55} fill="rgba(245,158,11,0.75)" />
+                <circle r={HOLE_R * 0.55} fill="rgba(245,158,11,0.82)" />
               )}
 
               {/* Scheibe */}
@@ -328,7 +493,7 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
                 <circle
                   r={discR + 3.5}
                   fill="none"
-                  stroke="rgb(251,191,36)"
+                  stroke={COLORS.yellow}
                   strokeWidth="1.5"
                   className="muehle-pulse"
                 />
@@ -336,6 +501,11 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             </g>
           );
         })}
+        {drag?.active && (
+          <g transform={`translate(${drag.x},${drag.y})`} style={{ pointerEvents: 'none', opacity: 0.82 }}>
+            <Disc color={drag.color} selected={false} removeHighlight={false} r={discR} />
+          </g>
+        )}
       </svg>
 
       {/* Gewinner-Overlay */}
@@ -346,10 +516,10 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             position: 'absolute', inset: 0,
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: '12px',
-            background: 'rgba(3,7,18,0.78)', borderRadius: '1rem', zIndex: 10,
+            background: 'rgba(76,46,23,0.78)', borderRadius: '1rem', zIndex: 10,
           }}
         >
-          <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 900, fontSize: '1.5rem', color: 'rgb(251,191,36)', letterSpacing: '0.08em', margin: 0 }}>
+          <p style={{ fontFamily: "'Exo 2', sans-serif", fontWeight: 900, fontSize: '1.5rem', color: '#fff5e0', letterSpacing: '0.08em', margin: 0 }}>
             {players[winner].name} gewinnt!
           </p>
           <button
@@ -357,8 +527,8 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             onClick={() => dispatch({ type: 'NEW_GAME' })}
             style={{
               padding: '0.5rem 1.5rem', borderRadius: '8px',
-              background: 'rgb(245,158,11)', border: 'none',
-              color: 'rgb(3,7,18)', fontFamily: "'Exo 2', sans-serif",
+              background: COLORS.yellow, border: 'none',
+              color: COLORS.text, fontFamily: "'Exo 2', sans-serif",
               fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
             }}
           >
