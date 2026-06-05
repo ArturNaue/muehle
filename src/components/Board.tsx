@@ -27,11 +27,13 @@ const COLORS = {
 
 const PLAYER_DISC: Record<PlayerColor, { fill: string; stroke: string; shine: number }> = {
   WHITE: { fill: '#f8f1df', stroke: '#bfae8f', shine: 0.62 },
-  BLACK: { fill: '#2b2118', stroke: '#0f0a06', shine: 0.18 },
+  BLACK: { fill: '#17120d', stroke: '#050302', shine: 0.16 },
   BLUE: { fill: '#2563eb', stroke: '#173a9a', shine: 0.42 },
   RED: { fill: '#f43f5e', stroke: '#9f1239', shine: 0.38 },
   GREEN: { fill: '#22c55e', stroke: '#15803d', shine: 0.42 },
   YELLOW: { fill: '#f59e0b', stroke: '#92400e', shine: 0.5 },
+  BROWN: { fill: '#5a351d', stroke: '#2f1a0d', shine: 0.22 },
+  PURPLE: { fill: '#8b5cf6', stroke: '#6d28d9', shine: 0.42 },
 };
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
@@ -324,8 +326,10 @@ const Board: React.FC<BoardProps> = ({ snap, playerCount, boardVariant, dispatch
             transform: flipped ? 'rotate(180deg)' : undefined,
             cursor: selectedNode !== null && phase === 'moving' ? 'pointer' : 'default',
             borderColor: currentPlayerIndex === pidx && !winner ? COLORS.yellow : undefined,
-            background: currentPlayerIndex === pidx && !winner ? 'rgba(245,158,11,0.24)' : undefined,
-            color: currentPlayerIndex === pidx && !winner ? COLORS.text : undefined,
+            background: currentPlayerIndex === pidx && !winner ? COLORS.darkUi : undefined,
+            color: currentPlayerIndex === pidx && !winner ? '#fffaf0' : undefined,
+            fontWeight: currentPlayerIndex === pidx && !winner ? 700 : undefined,
+            boxShadow: currentPlayerIndex === pidx && !winner ? '0 2px 8px rgba(61,36,18,0.28)' : undefined,
           }}
           className="muehle-status-btn"
         >{statusText}</button>

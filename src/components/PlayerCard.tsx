@@ -1,6 +1,6 @@
 // v1.0.0 | 2026-06-02 MEZ
 
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { PlayerInfo, PlayerColor } from '../game/types';
 
 interface PlayerCardProps {
@@ -19,11 +19,13 @@ const StonePreview: React.FC<{ color: PlayerColor; size?: number }> = ({ color, 
   const gradId = `card-marble-${color.toLowerCase()}`;
   const discs: Record<PlayerColor, { stops: string[][]; stroke: string }> = {
     WHITE: { stops: [['0%','#ffffff'],['46%','#f8f1df'],['100%','#c8b898']], stroke: '#bfae8f' },
-    BLACK: { stops: [['0%','#6a5544'],['42%','#2b2118'],['100%','#0f0a06']], stroke: '#0f0a06' },
+    BLACK: { stops: [['0%','#4a4036'],['42%','#17120d'],['100%','#050302']], stroke: '#050302' },
     BLUE: { stops: [['0%','#93c5fd'],['42%','#2563eb'],['100%','#1e3a8a']], stroke: '#173a9a' },
     RED: { stops: [['0%','#fda4af'],['42%','#f43f5e'],['100%','#9f1239']], stroke: '#9f1239' },
     GREEN: { stops: [['0%','#86efac'],['42%','#22c55e'],['100%','#166534']], stroke: '#15803d' },
     YELLOW: { stops: [['0%','#fde68a'],['42%','#f59e0b'],['100%','#92400e']], stroke: '#92400e' },
+    BROWN: { stops: [['0%','#8b5e34'],['42%','#5a351d'],['100%','#2f1a0d']], stroke: '#2f1a0d' },
+    PURPLE: { stops: [['0%','#c4b5fd'],['42%','#8b5cf6'],['100%','#6d28d9']], stroke: '#6d28d9' },
   };
   const { stops, stroke } = discs[color];
 
@@ -42,26 +44,10 @@ const StonePreview: React.FC<{ color: PlayerColor; size?: number }> = ({ color, 
 };
 
 const PlayerCard: React.FC<PlayerCardProps> = ({
-  id, player, isActive, winnerIndex, playerIndex, onRename, flipped = false,
+  id, player, isActive, winnerIndex, playerIndex, flipped = false,
 }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(player.name);
-  const inputRef = useRef<HTMLInputElement>(null);
-
   const isWinner = winnerIndex === playerIndex;
   const hasWinner = winnerIndex !== null;
-
-  const startEdit = () => {
-    setDraft(player.name);
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  };
-
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed) onRename(trimmed);
-    setEditing(false);
-  };
 
   const borderColor = isWinner
     ? '#f59e0b'
@@ -94,33 +80,13 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
     >
       <div id={`${id}-header`} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
         <StonePreview color={player.color} size={14} />
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-            id={`${id}-name-input`}
-            className="muehle-card-name"
-            style={{
-              flex: 1, background: 'rgba(255,250,238,0.95)', border: '1px solid rgba(76,46,23,0.38)',
-              borderRadius: '4px', padding: '2px 4px', color: '#3d2412', outline: 'none', minWidth: 0,
-            }}
-            maxLength={16}
-            autoFocus
-          />
-        ) : (
-          <button
-            id={`${id}-name-btn`}
-            onClick={startEdit}
-            title="Namen bearbeiten"
-            className="muehle-card-name"
-            style={{ color: '#3d2412', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', whiteSpace: 'nowrap' }}
-          >
-            {player.name} ✎
-          </button>
-        )}
+        <span
+          id={`${id}-name`}
+          className="muehle-card-name"
+          style={{ color: '#3d2412', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {player.name}
+        </span>
       </div>
       {/* Steine in Hand / auf Brett */}
       <div id={`${id}-stones`} style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>

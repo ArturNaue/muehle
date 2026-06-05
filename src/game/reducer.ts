@@ -259,10 +259,16 @@ function handleAIMove(snap: GameSnapshot, playerCount: number, cfg: BoardConfig)
 
 // ─── Initial State ───────────────────────────────────────────────────────────
 
-function makeInitialSnapshot(playerCount: 2 | 3, boardVariant: BoardVariant, names: string[] = [], aiPlayers: boolean[] = []): GameSnapshot {
+function makeInitialSnapshot(
+  playerCount: 2 | 3,
+  boardVariant: BoardVariant,
+  names: string[] = [],
+  aiPlayers: boolean[] = [],
+  playerColors: PlayerColor[] = getPlayerColors(playerCount)
+): GameSnapshot {
   const cfg = getBoardConfig(boardVariant);
   const stonesPerPlayer = STONES_BY_VARIANT[boardVariant][playerCount];
-  const players: PlayerInfo[] = getPlayerColors(playerCount).map((color, i) => ({
+  const players: PlayerInfo[] = playerColors.slice(0, playerCount).map((color, i) => ({
     name: names[i] || DEFAULT_NAMES[color],
     color,
     stonesInHand: stonesPerPlayer,
@@ -280,11 +286,17 @@ function makeInitialSnapshot(playerCount: 2 | 3, boardVariant: BoardVariant, nam
   };
 }
 
-export function makeInitialState(playerCount: 2 | 3, boardVariant: BoardVariant = 'standard', names: string[] = [], aiPlayers: boolean[] = []): GameState {
+export function makeInitialState(
+  playerCount: 2 | 3,
+  boardVariant: BoardVariant = 'standard',
+  names: string[] = [],
+  aiPlayers: boolean[] = [],
+  playerColors: PlayerColor[] = getPlayerColors(playerCount)
+): GameState {
   return {
     playerCount,
     boardVariant,
-    history: [makeInitialSnapshot(playerCount, boardVariant, names, aiPlayers)],
+    history: [makeInitialSnapshot(playerCount, boardVariant, names, aiPlayers, playerColors)],
     historyIndex: 0,
   };
 }

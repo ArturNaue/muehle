@@ -1,6 +1,6 @@
 // v1.1.0 | 2026-06-02 MEZ
 
-export type PlayerColor = 'WHITE' | 'BLACK' | 'BLUE' | 'RED' | 'GREEN' | 'YELLOW';
+export type PlayerColor = 'WHITE' | 'BLACK' | 'BLUE' | 'RED' | 'GREEN' | 'YELLOW' | 'BROWN' | 'PURPLE';
 export type GamePhase = 'placing' | 'moving' | 'removing' | 'gameover';
 
 export interface PlayerInfo {

@@ -443,15 +443,16 @@ export const STONES_PER_PLAYER: Record<number, number> = { 2: 9, 3: 6 };
 export const PLAYER_COLORS_2P: PlayerColor[] = ['WHITE', 'BLACK'];
 export const PLAYER_COLORS_3P: PlayerColor[] = ['BLUE', 'RED', 'GREEN'];
 export const PLAYER_COLORS: PlayerColor[] = PLAYER_COLORS_3P;
+export const PLAYER_COLOR_OPTIONS: PlayerColor[] = ['WHITE', 'BLACK', 'RED', 'GREEN', 'BLUE', 'YELLOW', 'BROWN', 'PURPLE'];
 
 export function getPlayerColors(playerCount: 2 | 3): PlayerColor[] {
   return playerCount === 2 ? PLAYER_COLORS_2P : PLAYER_COLORS_3P;
 }
 
 export const COLOR_DISPLAY: Record<PlayerColor, string> = {
-  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb',
+  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb', BROWN: 'Braun', PURPLE: 'Violett',
 };
 
 export const DEFAULT_NAMES: Record<PlayerColor, string> = {
-  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb',
+  WHITE: 'Weiss', BLACK: 'Schwarz', BLUE: 'Blau', RED: 'Rot', GREEN: 'Grün', YELLOW: 'Gelb', BROWN: 'Braun', PURPLE: 'Violett',
 };

@@ -3,17 +3,13 @@
 import React, { useEffect, useReducer, useState } from 'react';
 import { gameReducer, makeInitialState } from '../game/reducer';
 import { currentSnapshot } from '../game/types';
-import { BOARD_VARIANT_LABELS } from '../game/constants';
 import Board from './Board';
 import { UpdateOverlay } from '../App';
+import ThemeToggle from './ThemeToggle';
 
 const titleStyle: React.CSSProperties = {
   fontFamily: "'Exo 2', sans-serif", fontWeight: 900, letterSpacing: '0.12em',
 };
-const subtitleStyle: React.CSSProperties = {
-  fontFamily: "'Exo 2', sans-serif", fontWeight: 300,
-};
-
 const COLORS = {
   appBg: '#f7e1bd',
   text: '#3d2412',
@@ -29,9 +25,11 @@ interface GameScreenProps {
   initialState: ReturnType<typeof makeInitialState>;
   swUpdating: boolean;
   onNewSetup: () => void;
+  theme: 'classic' | 'sand';
+  onToggleTheme: () => void;
 }
 
-// ─── Menü-Bestätigungs-Modal ─────────────────────────────────────────────────
+// ─── Setup-Bestätigungs-Modal ────────────────────────────────────────────────
 
 interface MenuConfirmProps {
   onStay: () => void;
@@ -101,7 +99,7 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
               fontSize: '0.875rem', cursor: 'pointer',
             }}
           >
-            Zum Menü
+            Zum Setup
           </button>
         </div>
       </div>
@@ -111,7 +109,7 @@ function MenuConfirm({ onStay, onLeave }: MenuConfirmProps) {
 
 // ─── GameScreen ───────────────────────────────────────────────────────────────
 
-function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
+function GameScreen({ initialState, swUpdating, onNewSetup, theme, onToggleTheme }: GameScreenProps) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [showMenuConfirm, setShowMenuConfirm] = useState(false);
   const snap = currentSnapshot(state);
@@ -129,7 +127,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
   }, [snap, showMenuConfirm]);
 
   const handleMenuClick = () => {
-    // Im Gameover oder wenn noch kein Zug gemacht wurde: direkt zum Menü
+    // Im Gameover oder wenn noch kein Zug gemacht wurde: direkt zum Setup
     if (snap.winner !== null || state.historyIndex === 0) {
       onNewSetup();
     } else {
@@ -166,7 +164,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
           id={`muehle-btn-setup-${pos}`}
           onClick={handleMenuClick}
           className="muehle-ctrl-btn"
-        >Menü</button>
+        >Setup</button>
       </div>
     );
   };
@@ -185,23 +183,6 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
       >
         Mühle
       </h1>
-    );
-  };
-
-  const subtitle = (flipped: boolean) => {
-    const pos = flipped ? 'top' : 'bottom';
-    return (
-      <p
-        id={`muehle-subtitle-${pos}`}
-        style={{
-          ...subtitleStyle,
-          color: COLORS.mutedText, fontSize: '0.8125rem',
-          textAlign: 'center', margin: 0,
-          transform: flipped ? 'rotate(180deg)' : undefined,
-        }}
-      >
-        {pc}-Spieler · {BOARD_VARIANT_LABELS[state.boardVariant]}
-      </p>
     );
   };
 
@@ -231,7 +212,7 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
     >
       {swUpdating && <UpdateOverlay />}
 
-      {/* Menü-Bestätigungs-Modal */}
+      {/* Setup-Bestätigungs-Modal */}
       {showMenuConfirm && (
         <MenuConfirm
           onStay={() => setShowMenuConfirm(false)}
@@ -241,13 +222,12 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
 
       {/* 2-Spieler: oben gespiegelt */}
       {is2Player && attribution(true)}
-      {is2Player && subtitle(true)}
       {is2Player && heading(true)}
+      {is2Player && <ThemeToggle isSandTheme={theme === 'sand'} onToggle={onToggleTheme} flipped />}
       {is2Player && controls(true)}
 
       {/* 3-Spieler: normaler Header */}
       {!is2Player && heading(false)}
-      {!is2Player && subtitle(false)}
 
       {/* Spielfeld */}
       <main id="muehle-main" className="w-full flex justify-center">
@@ -256,8 +236,8 @@ function GameScreen({ initialState, swUpdating, onNewSetup }: GameScreenProps) {
 
       {/* Steuerung unten */}
       {controls(false)}
+      <ThemeToggle isSandTheme={theme === 'sand'} onToggle={onToggleTheme} />
       {is2Player && heading(false)}
-      {is2Player && subtitle(false)}
       {attribution(false)}
     </div>
   );

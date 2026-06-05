@@ -1,12 +1,15 @@
 // v1.3.0 | 2026-06-02 MEZ
 
 import React, { useState } from 'react';
-import { DEFAULT_NAMES, STONES_BY_VARIANT, BOARD_VARIANT_LABELS, getBoardConfig, getPlayerColors } from '../game/constants';
+import { DEFAULT_NAMES, STONES_BY_VARIANT, BOARD_VARIANT_LABELS, PLAYER_COLOR_OPTIONS, getBoardConfig } from '../game/constants';
 import { BoardVariant } from '../game/constants';
 import { PlayerColor } from '../game/types';
+import ThemeToggle from './ThemeToggle';
 
 interface SetupProps {
-  onStart: (playerCount: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[]) => void;
+  onStart: (playerCount: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[], playerColors: PlayerColor[]) => void;
+  theme: 'classic' | 'sand';
+  onToggleTheme: () => void;
 }
 
 const titleStyle: React.CSSProperties = {
@@ -28,22 +31,38 @@ const COLORS = {
 
 const PLAYER_DISC: Record<PlayerColor, { bg: string; border: string }> = {
   WHITE: { bg: '#f8f1df', border: '#bfae8f' },
-  BLACK: { bg: '#2b2118', border: '#0f0a06' },
+  BLACK: { bg: '#17120d', border: '#050302' },
   BLUE: { bg: '#2563eb', border: '#173a9a' },
   RED: { bg: '#f43f5e', border: '#9f1239' },
   GREEN: { bg: '#22c55e', border: '#15803d' },
   YELLOW: { bg: '#f59e0b', border: '#92400e' },
+  BROWN: { bg: '#5a351d', border: '#2f1a0d' },
+  PURPLE: { bg: '#8b5cf6', border: '#6d28d9' },
 };
 
 /** Kleiner Steinkreis (Scheibe) als Farbvorschau */
-const DiscPreview: React.FC<{ color: PlayerColor }> = ({ color }) => {
+const DiscPreview: React.FC<{ color: PlayerColor; selected?: boolean; disabled?: boolean; onClick?: () => void }> = ({ color, selected = false, disabled = false, onClick }) => {
   const { bg, border } = PLAYER_DISC[color];
   return (
-    <span style={{
-      display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
-      background: bg, border: `1.5px solid ${border}`,
-      boxShadow: '0 2px 4px rgba(61,36,18,0.34)', flexShrink: 0,
-    }} />
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      aria-label={DEFAULT_NAMES[color]}
+      aria-pressed={selected}
+      disabled={disabled}
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        background: bg,
+        border: selected ? `3px solid ${COLORS.darkUi}` : `2px solid ${border}`,
+        boxShadow: selected ? `0 0 0 3px ${COLORS.panelStrong}` : '0 2px 4px rgba(61,36,18,0.18)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.28 : 1,
+        padding: 0,
+        flexShrink: 0,
+      }}
+    />
   );
 };
 
@@ -126,18 +145,35 @@ const VariantButton: React.FC<VBtnProps> = ({ v, active, pc, onSelect, onStart, 
 
 // ─── Setup Screen ─────────────────────────────────────────────────────────────
 
-const Setup: React.FC<SetupProps> = ({ onStart }) => {
+function resolveVisibleColors(colors: PlayerColor[], count: 2 | 3): PlayerColor[] {
+  const resolved = [...colors];
+  const used = new Set<PlayerColor>();
+  for (let i = 0; i < count; i++) {
+    if (used.has(resolved[i])) {
+      const replacement = PLAYER_COLOR_OPTIONS.find(option => !used.has(option));
+      if (replacement) resolved[i] = replacement;
+    }
+    used.add(resolved[i]);
+  }
+  return resolved;
+}
+
+const Setup: React.FC<SetupProps> = ({ onStart, theme, onToggleTheme }) => {
   const [playerCount, setPlayerCount] = useState<2 | 3>(2);
   const [boardVariant, setBoardVariant] = useState<BoardVariant>('standard');
+  const [selectedColors, setSelectedColors] = useState<PlayerColor[]>(['WHITE', 'BLACK', 'RED']);
   const [names, setNames] = useState<string[]>([
-    DEFAULT_NAMES.WHITE, DEFAULT_NAMES.BLACK, DEFAULT_NAMES.GREEN,
+    DEFAULT_NAMES.WHITE, DEFAULT_NAMES.BLACK, DEFAULT_NAMES.RED,
   ]);
-  const [aiByColor, setAiByColor] = useState<Partial<Record<PlayerColor, boolean>>>({});
-  const playerColors = getPlayerColors(playerCount);
+  const [aiPlayers, setAiPlayers] = useState<boolean[]>([false, false, false]);
+  const playerColors = selectedColors.slice(0, playerCount);
 
   const changePlayerCount = (count: 2 | 3) => {
+    const baseColors: PlayerColor[] = count === 2 ? ['WHITE', 'BLACK', selectedColors[2] || 'RED'] : ['BLUE', 'RED', 'GREEN'];
+    const resolvedColors = resolveVisibleColors(baseColors, count);
     setPlayerCount(count);
-    setNames(getPlayerColors(count).map(color => DEFAULT_NAMES[color]));
+    setSelectedColors(resolvedColors);
+    setNames(resolvedColors.map(color => DEFAULT_NAMES[color]));
   };
 
   const updateName = (idx: number, value: string) => {
@@ -146,17 +182,38 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
     setNames(updated);
   };
 
-  const toggleAI = (color: PlayerColor) => {
-    setAiByColor(prev => ({ ...prev, [color]: !prev[color] }));
+  const toggleAI = (idx: number) => {
+    setAiPlayers(prev => {
+      const updated = [...prev];
+      updated[idx] = !updated[idx];
+      return updated;
+    });
+  };
+
+  const selectPlayerColor = (idx: number, color: PlayerColor) => {
+    if (selectedColors.slice(0, playerCount).some((selected, colorIdx) => colorIdx !== idx && selected === color)) return;
+
+    setSelectedColors(prev => {
+      const updated = [...prev];
+      updated[idx] = color;
+      return updated;
+    });
+
+    setNames(prev => {
+      const updated = [...prev];
+      const oldDefault = DEFAULT_NAMES[selectedColors[idx]];
+      if (!updated[idx] || updated[idx] === oldDefault) updated[idx] = DEFAULT_NAMES[color];
+      return updated;
+    });
   };
 
   const startGame = (count: 2 | 3 = playerCount, variant: BoardVariant = boardVariant) => {
-    const colors = getPlayerColors(count);
+    const colors = selectedColors.slice(0, count);
     const useCurrentNames = count === playerCount;
     const trimmed = colors.map((color, i) =>
       (useCurrentNames ? names[i]?.trim() : '') || DEFAULT_NAMES[color]
     );
-    onStart(count, trimmed, variant, colors.map(color => Boolean(aiByColor[color])));
+    onStart(count, trimmed, variant, aiPlayers.slice(0, count), colors);
   };
 
   const cardStyle = (active: boolean): React.CSSProperties => ({
@@ -212,38 +269,61 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
             Spielernamen
           </p>
           {playerColors.map((color, idx) => (
-            <div key={color} id={`muehle-setup-name-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-              <DiscPreview color={color} />
-              <input
-                value={names[idx]}
-                onChange={e => updateName(idx, e.target.value)}
-                maxLength={16}
-                placeholder={DEFAULT_NAMES[color]}
-                style={{
-                  flex: 1, background: COLORS.panelStrong, border: '1px solid rgba(76,46,23,0.35)',
-                  borderRadius: '6px', padding: '0.375rem 0.625rem',
-                  color: COLORS.text, fontFamily: "'Exo 2', sans-serif", fontSize: '0.875rem', outline: 'none',
-                }}
-              />
-              <button
-                id={`muehle-setup-ai-${idx}`}
-                onClick={() => toggleAI(color)}
-                style={{
-                  padding: '0.375rem 0.55rem',
-                  minWidth: '42px',
-                  borderRadius: '6px',
-                  border: aiByColor[color] ? `1px solid ${COLORS.yellow}` : '1px solid rgba(76,46,23,0.35)',
-                  background: aiByColor[color] ? COLORS.darkUi : COLORS.panelStrong,
-                  color: aiByColor[color] ? '#fffaf0' : COLORS.text,
-                  fontFamily: "'Exo 2', sans-serif",
-                  fontSize: '0.75rem',
-                  fontWeight: aiByColor[color] ? 700 : 500,
-                  cursor: 'pointer',
-                }}
-                title={aiByColor[color] ? 'KI deaktivieren' : 'KI aktivieren'}
-              >
-                KI
-              </button>
+            <div key={`player-${idx}`} id={`muehle-setup-name-${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                <input
+                  value={names[idx]}
+                  onChange={e => updateName(idx, e.target.value)}
+                  maxLength={16}
+                  placeholder={DEFAULT_NAMES[color]}
+                  style={{
+                    flex: 1,
+                    background: COLORS.panelStrong,
+                    border: '1px solid rgba(76,46,23,0.35)',
+                    borderRadius: '10px',
+                    padding: '0.625rem 0.75rem',
+                    color: COLORS.text,
+                    fontFamily: "'Exo 2', sans-serif",
+                    fontSize: '1rem',
+                    outline: 'none',
+                    minWidth: 0,
+                  }}
+                />
+                <button
+                  id={`muehle-setup-ai-${idx}`}
+                  onClick={() => toggleAI(idx)}
+                  style={{
+                    padding: '0.625rem 0.75rem',
+                    minWidth: '54px',
+                    borderRadius: '10px',
+                    border: aiPlayers[idx] ? `1px solid ${COLORS.yellow}` : '1px solid rgba(76,46,23,0.35)',
+                    background: aiPlayers[idx] ? COLORS.darkUi : COLORS.panelStrong,
+                    color: aiPlayers[idx] ? '#fffaf0' : COLORS.text,
+                    fontFamily: "'Exo 2', sans-serif",
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                  title={aiPlayers[idx] ? 'KI deaktivieren' : 'KI aktivieren'}
+                >
+                  KI
+                </button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {PLAYER_COLOR_OPTIONS.map(option => {
+                  const selected = option === color;
+                  const disabled = !selected && selectedColors.slice(0, playerCount).includes(option);
+                  return (
+                    <DiscPreview
+                      key={option}
+                      color={option}
+                      selected={selected}
+                      disabled={disabled}
+                      onClick={() => selectPlayerColor(idx, option)}
+                    />
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
@@ -265,19 +345,28 @@ const Setup: React.FC<SetupProps> = ({ onStart }) => {
         </div>
       </div>
 
+      <div id="muehle-setup-theme" style={{ ...cardStyle(false), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+        <p style={{ color: COLORS.mutedText, fontSize: '0.7rem', margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          Farbschema
+        </p>
+        <ThemeToggle isSandTheme={theme === 'sand'} onToggle={onToggleTheme} idPrefix="muehle-setup-theme" />
+      </div>
+
       {/* Start */}
       <button
         id="muehle-setup-start"
         onClick={() => startGame()}
         style={{
           padding: '0.75rem 2.5rem', borderRadius: '10px',
-          background: COLORS.darkUi, border: 'none',
+          background: '#16a34a',
+          border: '1px solid #15803d',
           color: '#fffaf0', fontFamily: "'Exo 2', sans-serif",
           fontWeight: 700, fontSize: '1rem', letterSpacing: '0.05em',
           cursor: 'pointer',
+          boxShadow: '0 8px 18px rgba(21,128,61,0.28)',
         }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        onMouseEnter={e => (e.currentTarget.style.background = '#15803d')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#16a34a')}
       >
         SPIEL STARTEN
       </button>

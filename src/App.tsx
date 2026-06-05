@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { makeInitialState } from './game/reducer';
-import { BoardVariant, getPlayerColors } from './game/constants';
+import { BoardVariant } from './game/constants';
+import { PlayerColor } from './game/types';
 import GameScreen from './components/GameScreen';
 import Setup from './components/Setup';
+
+type AppTheme = 'classic' | 'sand';
 
 function App() {
   // gameKey: jedes neue Spiel bekommt einen einzigartigen Key → GameScreen wird
@@ -12,6 +15,10 @@ function App() {
   const [gameKey, setGameKey] = useState(0);
   const [initialGameState, setInitialGameState] = useState<ReturnType<typeof makeInitialState> | null>(null);
   const [swUpdating, setSwUpdating] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    const saved = localStorage.getItem('muehle-theme');
+    return saved === 'classic' ? 'classic' : 'sand';
+  });
 
   useEffect(() => {
     const handler = () => setSwUpdating(true);
@@ -19,9 +26,13 @@ function App() {
     return () => window.removeEventListener('sw-update-start', handler);
   }, []);
 
-  const handleStart = (count: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[]) => {
-    const s = makeInitialState(count, boardVariant, names, aiPlayers);
-    getPlayerColors(count).forEach((_, i) => {
+  useEffect(() => {
+    localStorage.setItem('muehle-theme', theme);
+  }, [theme]);
+
+  const handleStart = (count: 2 | 3, names: string[], boardVariant: BoardVariant, aiPlayers: boolean[], playerColors: PlayerColor[]) => {
+    const s = makeInitialState(count, boardVariant, names, aiPlayers, playerColors);
+    playerColors.slice(0, count).forEach((_, i) => {
       if (names[i]) s.history[0].players[i].name = names[i];
     });
     setInitialGameState(s);
@@ -32,7 +43,11 @@ function App() {
     return (
       <>
         {swUpdating && <UpdateOverlay />}
-        <Setup onStart={handleStart} />
+        <Setup
+          onStart={handleStart}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'sand' ? 'classic' : 'sand')}
+        />
       </>
     );
   }
@@ -43,6 +58,8 @@ function App() {
       initialState={initialGameState}
       swUpdating={swUpdating}
       onNewSetup={() => setInitialGameState(null)}
+      theme={theme}
+      onToggleTheme={() => setTheme(theme === 'sand' ? 'classic' : 'sand')}
     />
   );
 }
